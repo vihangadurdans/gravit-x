@@ -1,0 +1,1239 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>G-Sync v1.3 - Live Band Sync, Lyrics & Auto-Scroll</title>
+    <link rel="icon" type="image/jpeg" href="logo.jpg">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        stageDark: '#070010',
+                        stageCard: '#150926',
+                        stageCardHover: '#1f0d38',
+                        neonPurple: '#c084fc',
+                        neonLavender: '#e9d5ff',
+                        neonAmber: '#ffb700',
+                        neonGreen: '#00ff66',
+                        neonRed: '#ff2a5f'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'Menlo', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #070010; }
+        ::-webkit-scrollbar-thumb { background: #3b1e5e; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #c084fc; }
+
+        @keyframes pulse-purple {
+            0%, 100% { box-shadow: 0 0 10px rgba(192, 132, 252, 0.3); }
+            50% { box-shadow: 0 0 22px rgba(192, 132, 252, 0.85); }
+        }
+        .sync-active { animation: pulse-purple 2s infinite; }
+
+        .tempo-badge {
+            color: #ffb700;
+            background: rgba(255, 183, 0, 0.15);
+            border: 1px solid rgba(255, 183, 0, 0.4);
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 0.85rem;
+        }
+
+        .metronome-flash {
+            background-color: #ffb700 !important;
+            box-shadow: 0 0 20px #ffb700;
+        }
+
+        .lyric-line {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            line-height: 1.25;
+            margin-bottom: 0.5rem;
+        }
+        .syllable {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: flex-start;
+            margin-right: 0.18em;
+            position: relative;
+        }
+        .chord-above {
+            color: #c084fc;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: var(--chord-size, 0.8em);
+            line-height: 1;
+            padding: 1px 4px;
+            margin-bottom: 3px;
+            white-space: nowrap;
+            background: rgba(192, 132, 252, 0.15);
+            border: 1px solid rgba(192, 132, 252, 0.35);
+            border-radius: 4px;
+            letter-spacing: -0.02em;
+            user-select: none;
+        }
+        .high-contrast .chord-above {
+            color: #00ff66 !important;
+            background: rgba(0, 255, 102, 0.2) !important;
+            border-color: rgba(0, 255, 102, 0.6) !important;
+        }
+        .word-text {
+            white-space: pre;
+            color: var(--lyric-color, #f1f5f9);
+        }
+        .high-contrast .word-text {
+            color: #ffffff !important;
+            font-weight: 600;
+        }
+        .line-plain {
+            margin-bottom: 0.5rem;
+            white-space: pre-wrap;
+        }
+
+        .modal-fade {
+            transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-stageDark text-slate-100 font-sans min-h-screen flex flex-col antialiased selection:bg-neonPurple selection:text-black">
+
+    <header class="bg-stageCard border-b border-purple-900/50 sticky top-0 z-50 px-4 py-2.5 shadow-2xl">
+        <div class="max-w-7xl mx-auto flex items-center justify-between gap-4">
+            
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-700 to-neonPurple p-0.5 shadow-lg flex items-center justify-center">
+                    <div class="w-full h-full bg-stageCard rounded-[10px] flex items-center justify-center">
+                        <i data-lucide="activity" class="w-5 h-5 text-neonPurple"></i>
+                    </div>
+                </div>
+                <div>
+                    <div class="flex items-center space-x-2">
+                        <h1 class="font-black tracking-widest text-lg text-white">G-SYNC</h1>
+                        <span class="text-[10px] px-2 py-0.5 rounded bg-purple-950 text-neonPurple border border-purple-800 font-mono font-bold">v1.4 CLOUD</span>
+                    </div>
+                    <p class="text-[10px] text-purple-300/60 uppercase tracking-wider font-semibold">Live Stage Sync Engine</p>
+                </div>
+            </div>
+
+            <div class="hidden md:flex items-center space-x-4 bg-purple-950/60 border border-purple-900/60 px-4 py-1.5 rounded-full">
+                <div class="flex items-center space-x-2">
+                    <label class="text-xs text-purple-300/70 font-medium">Role:</label>
+                    <select id="roleSelect" class="bg-stageCard border border-purple-800/60 text-xs rounded-lg px-2 py-1 text-neonPurple font-semibold focus:outline-none focus:border-neonPurple">
+                        <option value="Vocal">Vocal / Lead</option>
+                        <option value="Guitar">Guitar / Keys</option>
+                        <option value="Bass">Bass</option>
+                        <option value="Drums">Drums</option>
+                    </select>
+                </div>
+
+                <div class="flex items-center space-x-2 border-l border-purple-900/60 pl-4">
+                    <span id="roleBadge" class="text-xs px-2.5 py-0.5 rounded-full font-bold bg-amber-950/80 text-neonAmber border border-amber-800/80 tracking-wide">FOLLOWER</span>
+                    <button id="leaderToggleBtn" class="text-xs bg-purple-900/50 hover:bg-purple-800/70 text-purple-200 px-3 py-1 rounded-lg font-semibold transition border border-purple-800/60 flex items-center space-x-1.5">
+                        <i data-lucide="crown" class="w-3.5 h-3.5 text-neonAmber"></i>
+                        <span>Take Control (Host)</span>
+                    </button>
+                </div>
+
+                <div class="flex items-center space-x-2 border-l border-purple-900/60 pl-4">
+                    <div id="syncIndicator" class="w-2.5 h-2.5 rounded-full bg-neonPurple sync-active"></div>
+                    <span class="text-xs text-purple-200/80 font-mono">CHANNEL: <strong class="text-white">G-BAND-LIVE</strong></span>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-2">
+                <button id="contrastToggle" class="p-2 bg-purple-900/40 hover:bg-purple-800/60 rounded-lg text-purple-200 transition border border-purple-800/60" title="Toggle High Contrast Mode">
+                    <i data-lucide="sun" class="w-4 h-4"></i>
+                </button>
+                <div class="h-4 border-r border-purple-900/60 my-auto hidden sm:block"></div>
+                <button id="fontSizeDown" class="p-2 bg-purple-900/40 hover:bg-purple-800/60 rounded-lg text-purple-200 transition border border-purple-800/60" title="Decrease Lyric Size">
+                    <i data-lucide="minus" class="w-4 h-4"></i>
+                </button>
+                <button id="fontSizeUp" class="p-2 bg-purple-900/40 hover:bg-purple-800/60 rounded-lg text-purple-200 transition border border-purple-800/60" title="Increase Lyric Size">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                </button>
+                <button id="fullScreenBtn" class="p-2 bg-purple-900/40 hover:bg-purple-800/60 rounded-lg text-purple-200 transition border border-purple-800/60" title="Toggle Fullscreen">
+                    <i data-lucide="maximize-2" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="flex-1 max-w-7xl w-full mx-auto grid grid-cols-1 md:grid-cols-12 gap-4 p-4">
+        
+        <aside class="md:col-span-4 lg:col-span-3 flex flex-col space-y-4">
+            
+            <div class="bg-stageCard border border-purple-900/50 rounded-2xl p-4 shadow-xl flex flex-col space-y-3">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xs font-bold uppercase tracking-wider text-purple-300/70 flex items-center gap-1.5">
+                        <i data-lucide="music" class="w-4 h-4 text-neonPurple"></i> Band Setlist
+                    </h2>
+                    <button id="newSongBtn" class="text-xs bg-neonPurple/10 hover:bg-neonPurple/20 text-neonPurple border border-neonPurple/30 px-2.5 py-1 rounded-lg font-bold flex items-center space-x-1 transition">
+                        <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+                        <span>New Song</span>
+                    </button>
+                </div>
+
+                <div id="songList" class="space-y-1.5 max-h-[220px] overflow-y-auto pr-1"></div>
+            </div>
+
+            <div class="bg-stageCard border border-purple-900/50 rounded-2xl p-4 shadow-xl flex flex-col space-y-4">
+                <h2 class="text-xs font-bold uppercase tracking-wider text-purple-300/70 flex items-center gap-1.5">
+                    <i data-lucide="sliders" class="w-4 h-4 text-neonAmber"></i> Real-time Controls
+                </h2>
+
+                <div class="bg-purple-950/40 rounded-xl p-3 border border-purple-900/50 space-y-2">
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="text-purple-300/70 font-medium">Transpose Key</span>
+                        <span id="keyDisplay" class="font-mono font-bold text-neonPurple text-sm">Original</span>
+                    </div>
+                    <div class="flex items-center justify-between gap-2">
+                        <button id="transposeDown" class="flex-1 py-1.5 bg-purple-900/50 hover:bg-purple-800/70 text-white font-mono font-bold rounded-lg border border-purple-800/60 transition flex items-center justify-center space-x-1">
+                            <i data-lucide="chevron-down" class="w-4 h-4 text-neonPurple"></i>
+                            <span>-1</span>
+                        </button>
+                        <button id="transposeReset" class="px-3 py-1.5 bg-purple-900/50 hover:bg-purple-800/70 text-purple-300/70 hover:text-white text-xs font-semibold rounded-lg border border-purple-800/60 transition">
+                            Reset
+                        </button>
+                        <button id="transposeUp" class="flex-1 py-1.5 bg-purple-900/50 hover:bg-purple-800/70 text-white font-mono font-bold rounded-lg border border-purple-800/60 transition flex items-center justify-center space-x-1">
+                            <i data-lucide="chevron-up" class="w-4 h-4 text-neonPurple"></i>
+                            <span>+1</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-purple-950/40 rounded-xl p-3 border border-purple-900/50 space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs text-purple-300/70 font-medium">Global Tempo</span>
+                        <div class="flex items-center space-x-2">
+                            <span id="bpmDisplay" class="font-mono font-black text-neonAmber text-lg">110</span>
+                            <span class="text-[10px] text-purple-400/50 font-bold">BPM</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <input id="bpmSlider" type="range" min="50" max="220" value="110" class="w-full accent-neonAmber bg-purple-900/60 h-2 rounded-lg cursor-pointer">
+                    </div>
+                    <div class="flex items-center justify-between pt-1">
+                        <button id="metronomeAudioToggle" class="text-xs text-purple-300/70 hover:text-white flex items-center space-x-1.5">
+                            <i id="audioIcon" data-lucide="volume-x" class="w-4 h-4 text-purple-400/50"></i>
+                            <span id="audioLabel">Click Audio Off</span>
+                        </button>
+                        <div id="metronomeVisual" class="w-3.5 h-3.5 rounded-full bg-purple-800/60 transition-colors duration-75"></div>
+                    </div>
+                </div>
+
+                <div class="bg-purple-950/40 rounded-xl p-3 border border-purple-900/50 space-y-2">
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="text-purple-300/70 font-medium">Scroll Speed</span>
+                        <span id="scrollSpeedVal" class="font-mono font-bold text-purple-100">1.0x</span>
+                    </div>
+                    <input id="scrollSpeedSlider" type="range" min="0.5" max="2.5" step="0.1" value="1.0" class="w-full accent-neonPurple bg-purple-900/60 h-2 rounded-lg cursor-pointer">
+                    
+                    <div class="grid grid-cols-4 gap-1 pt-1">
+                        <button class="speed-preset-btn text-[10px] font-mono font-bold py-1 bg-purple-900/40 hover:bg-purple-800/60 text-purple-300 rounded border border-purple-800/50" data-speed="0.8">0.8x</button>
+                        <button class="speed-preset-btn text-[10px] font-mono font-bold py-1 bg-purple-900/40 hover:bg-purple-800/60 text-purple-300 rounded border border-purple-800/50" data-speed="1.0">1.0x</button>
+                        <button class="speed-preset-btn text-[10px] font-mono font-bold py-1 bg-purple-900/40 hover:bg-purple-800/60 text-purple-300 rounded border border-purple-800/50" data-speed="1.2">1.2x</button>
+                        <button class="speed-preset-btn text-[10px] font-mono font-bold py-1 bg-purple-900/40 hover:bg-purple-800/60 text-purple-300 rounded border border-purple-800/50" data-speed="1.5">1.5x</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-stageCard border border-purple-900/50 rounded-2xl p-2 shadow-xl flex">
+                <button id="readModeTab" class="flex-1 py-2 text-xs font-bold rounded-xl bg-neonPurple/15 text-neonPurple border border-neonPurple/30 transition flex items-center justify-center space-x-1.5">
+                    <i data-lucide="eye" class="w-4 h-4"></i>
+                    <span>Stage View</span>
+                </button>
+                <button id="editModeTab" class="flex-1 py-2 text-xs font-bold rounded-xl text-purple-300/70 hover:text-white transition flex items-center justify-center space-x-1.5">
+                    <i data-lucide="edit-3" class="w-4 h-4"></i>
+                    <span>Editor</span>
+                </button>
+            </div>
+        </aside>
+
+        <main class="md:col-span-8 lg:col-span-9 flex flex-col space-y-4">
+            
+            <div class="bg-stageCard border border-purple-900/50 rounded-2xl p-3 shadow-2xl flex items-center justify-between gap-4 sticky top-16 z-40">
+                <div class="flex items-center space-x-3">
+                    <button id="playBtn" class="w-12 h-12 rounded-xl bg-gradient-to-tr from-neonPurple to-purple-600 hover:from-purple-400 hover:to-purple-500 text-black font-black shadow-lg shadow-purple-950/50 flex items-center justify-center transition active:scale-95">
+                        <i id="playIcon" data-lucide="play" class="w-6 h-6 fill-current"></i>
+                    </button>
+                    <button id="resetScrollBtn" class="p-3 bg-purple-900/40 hover:bg-purple-800/60 text-purple-200 rounded-xl transition border border-purple-800/60" title="Reset Scroll Position">
+                        <i data-lucide="rotate-ccw" class="w-5 h-5"></i>
+                    </button>
+                    <div>
+                        <h2 id="currentSongTitle" class="font-black text-lg md:text-xl text-white tracking-wide truncate max-w-[200px] sm:max-w-[340px]">
+                            Loading Song...
+                        </h2>
+                        <div class="flex items-center space-x-2 text-xs text-purple-300/70 font-medium">
+                            <span id="currentArtist">Artist Name</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-3">
+                    <div class="text-right hidden sm:block">
+                        <div id="syncRoleStatus" class="text-xs font-bold text-neonAmber">FOLLOWER MODE</div>
+                        <div class="text-[10px] text-purple-400/50">Receiving Live Telemetry</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="stagePrompterView" class="bg-stageCard border border-purple-900/50 rounded-2xl p-6 shadow-2xl min-h-[550px] max-h-[70vh] overflow-y-auto relative scroll-smooth">
+                <div id="tempoAlert" class="hidden sticky top-2 z-30 bg-amber-500/20 border border-amber-500/50 backdrop-blur-md text-neonAmber px-4 py-2.5 rounded-xl font-bold text-sm flex items-center justify-between shadow-xl animate-bounce">
+                    <span class="flex items-center gap-2">
+                        <i data-lucide="zap" class="w-4 h-4 text-neonAmber"></i>
+                        AUTOMATED TEMPO SHIFT DETECTED!
+                    </span>
+                    <span id="tempoAlertText" class="font-mono text-white bg-amber-950/80 px-2 py-0.5 rounded border border-amber-500/40">BPM -> 140</span>
+                </div>
+
+                <div id="lyricsContainer" class="space-y-1 font-sans text-lg leading-relaxed pt-4 pb-36"></div>
+            </div>
+
+            <div id="songEditorView" class="hidden bg-stageCard border border-purple-900/50 rounded-2xl p-6 shadow-2xl space-y-4">
+                <div class="flex justify-between items-center border-b border-purple-900/50 pb-3">
+                    <h3 class="font-bold text-white flex items-center gap-2">
+                        <i data-lucide="file-text" class="w-4 h-4 text-neonPurple"></i> Edit Song & Automation Rules
+                    </h3>
+                    <div class="space-x-2 flex items-center">
+                        <button id="deleteSongBtn" class="px-3 py-1.5 bg-red-950/60 hover:bg-red-900/80 text-neonRed border border-red-800/60 font-bold rounded-xl text-xs transition flex items-center gap-1.5">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Delete
+                        </button>
+                        <button id="saveSongBtn" class="px-4 py-1.5 bg-neonGreen/20 hover:bg-neonGreen/30 text-neonGreen border border-neonGreen/40 font-bold rounded-xl text-xs transition flex items-center gap-1.5">
+                            <i data-lucide="save" class="w-4 h-4"></i> Save Song
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                        <label class="text-xs font-semibold text-purple-300/70">Song Title</label>
+                        <input id="editTitle" type="text" class="w-full mt-1 bg-purple-950/60 border border-purple-900/60 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-neonPurple">
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-purple-300/70">Artist / Category</label>
+                        <input id="editArtist" type="text" class="w-full mt-1 bg-purple-950/60 border border-purple-900/60 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-neonPurple">
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-purple-300/70">Base Tempo (BPM)</label>
+                        <input id="editBpm" type="number" min="40" max="240" class="w-full mt-1 bg-purple-950/60 border border-purple-900/60 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-neonPurple">
+                    </div>
+                </div>
+
+                <div>
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="text-xs font-semibold text-purple-300/70">Lyrics & Chords Markup</label>
+                        <span class="text-[11px] text-purple-400/60 font-mono">Chords: [Am7/G] [F#m7b5] | Tempo shift: {BPM:140}</span>
+                    </div>
+                    <textarea id="editTextarea" rows="14" class="w-full bg-purple-950/60 border border-purple-900/60 rounded-xl p-4 font-mono text-sm text-neonLavender focus:outline-none focus:border-neonPurple leading-relaxed" placeholder="[G] Intro lyrics... &#10;{BPM:140} &#10;[Am7/G] Fast tempo transition section..."></textarea>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <div id="hostPinModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden modal-fade">
+        <div class="bg-stageCard border border-purple-800 rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-4">
+            <div class="flex items-center space-x-3 text-neonAmber">
+                <i data-lucide="shield-lock" class="w-6 h-6"></i>
+                <h3 class="font-black text-lg text-white">Stage Host Verification</h3>
+            </div>
+            <p class="text-xs text-purple-300/80 leading-relaxed">
+                Entering Host mode allows you to remotely command all connected follower prompters via Firebase cloud. Enter the Stage PIN to take control.
+            </p>
+            <div>
+                <label class="text-xs font-semibold text-purple-300/70">Stage Host PIN (Default: 1234)</label>
+                <input id="hostPinInput" type="password" maxlength="6" class="w-full mt-1 bg-purple-950 border border-purple-800 rounded-xl px-4 py-2 text-center text-lg font-mono text-white focus:outline-none focus:border-neonAmber" placeholder="••••">
+                <div id="hostPinError" class="text-xs text-neonRed mt-1 font-semibold hidden">Incorrect Stage PIN. Try again.</div>
+            </div>
+            <div class="flex justify-end space-x-2 pt-2">
+                <button id="cancelHostPinBtn" class="px-4 py-2 bg-purple-900/40 hover:bg-purple-800/60 text-purple-300 rounded-xl text-xs font-bold transition">Cancel</button>
+                <button id="confirmHostPinBtn" class="px-4 py-2 bg-neonAmber hover:bg-amber-500 text-black rounded-xl text-xs font-black transition">Authenticate Host</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+    <script>
+        // --- FIREBASE CONFIGURATION & INITIALIZATION ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyC8YucRNr-QMU0dB9ZChGuyTrwbLSOhu9w",
+            authDomain: "g-sync-band.firebaseapp.com",
+            databaseURL: "https://g-sync-band-default-rtdb.firebaseio.com",
+            projectId: "g-sync-band",
+            storageBucket: "g-sync-band.firebasestorage.app",
+            messagingSenderId: "559132852557",
+            appId: "1:559132852557:web:5ec0d98b6002968b1d7704"
+        };
+
+        let database = null;
+        let songsRef = null;
+        let sessionRef = null;
+
+        try {
+            firebase.initializeApp(firebaseConfig);
+            database = firebase.database();
+            songsRef = database.ref('gsync_songs');
+            sessionRef = database.ref('gsync_sessions/live_room');
+        } catch (err) {
+            console.warn("Firebase initialized in fallback mode:", err);
+        }
+
+        // --- DEFAULT PRESET SONGS ---
+        const DEFAULT_PRESETS = [
+            {
+                id: 'preset-1',
+                title: 'Baila Nonstop Medley',
+                artist: 'Sri Lankan Classic Party Medley',
+                bpm: 110,
+                content: `[Intro Medley]
+[G] . . . [Em7] . . . [Cadd9] . . . [D/F#] . . .
+(Get ready for live tempo acceleration!)
+
+[Verse 1]
+[G] Surangani kiwwa maatha maalu [Em7] genawa
+[Cadd9] Maalu market ekema maalu [D/F#] nehe kiwwa
+[G] Surangani maalu gena [Em7] maalu gena
+[Cadd9] Sura-ngani maalu [D/F#] genawa...
+
+{BPM:138}
+[Section - Fast Baila Acceleration]
+⚡ TEMPO AUTOMATION ACCELERATING TO 138 BPM!
+
+[G] Yamang Bando Vesak Balanna [Em7] Pettaththe
+[Cadd9] Handiya Gaane Paan Paththu [D/F#] Karala Thiyanawa
+[G] Konda Bandapu Yaka Awith [Em7] Dancing Karana
+[Cadd9] Shaa! Marai Bando [D/F#] Ape Sinhala Baila! [G]`
+            },
+            {
+                id: 'preset-2',
+                title: 'Kandy Lamissi',
+                artist: 'Sri Lankan Classic Pop',
+                bpm: 98,
+                content: `[Intro]
+[C] . . . [Am7] . . . [Fmaj7] . . . [G/B] . . .
+
+[Verse 1]
+[C] Kandy lamissi [Am7] kandy lamissi
+[Fmaj7] Obatai ma adare [G/B] kare
+[C] Nelum male suwanda [Am7] aran
+[Fmaj7] Mage pahan ahase [G/B] dilunee
+
+[Chorus]
+[Fmaj7] Ruwa ruwa obe [G/B] lassana sitha
+[C] Ma hatha allan [Am7] giya
+[Fmaj7] Sandak wage [G/B] dilena obe [C] muwa...`
+            },
+            {
+                id: 'preset-3',
+                title: 'Ocean Rock Jam',
+                artist: 'Fusion Island Medley',
+                bpm: 120,
+                content: `[Intro Rock Groove]
+[Am] . . . [F#m7b5] . . . [C/G] . . . [E7/G#] . . .
+
+[Verse 1]
+[Am] Waves breaking down on the southern coastline
+[F#m7b5] Guitar shredding through the tropical night
+[C/G] Drums pounding like thunder
+[E7/G#] Keep the rhythm tight!
+
+{BPM:150}
+[Outro Fast Solo]
+⚡ RAMP UP TEMPO FOR FINAL GUITAR SOLO!
+[Am] . . . [F#m7b5] . . . [C/G] . . . [E7/G#] . . . [Am]`
+            }
+        ];
+
+        // --- GLOBAL ENGINE STATE ---
+        let songs = [];
+        let currentSongId = null;
+        let isLeader = false;
+        let userRole = 'Vocal';
+        let isPlaying = false;
+        let currentTranspose = 0;
+        let fontSize = 19;
+        let metronomeAudio = false;
+        let scrollSpeedMultiplier = 1.0;
+        let highContrast = false;
+
+        // Security PIN (Default: 1234)
+        const HOST_PIN = "1234";
+
+        // Web Audio API & rAF Precision Timers
+        let audioCtx = null;
+        let nextNoteTime = 0.0;
+        let rAFId = null;
+        let lastTimestamp = 0;
+
+        // Last known applied state from Firebase (to avoid re-render churn)
+        let lastAppliedState = {
+            songId: null,
+            isPlaying: null,
+            scrollPos: null,
+            bpm: null,
+            transpose: null,
+            updatedAt: 0
+        };
+
+        // Music Theory Constants
+        const CHORDS_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+        const CHORDS_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+        // --- DOM ELEMENTS ---
+        const songListEl = document.getElementById('songList');
+        const lyricsContainer = document.getElementById('lyricsContainer');
+        const playBtn = document.getElementById('playBtn');
+        const playIcon = document.getElementById('playIcon');
+        const currentSongTitle = document.getElementById('currentSongTitle');
+        const currentArtist = document.getElementById('currentArtist');
+        const bpmDisplay = document.getElementById('bpmDisplay');
+        const bpmSlider = document.getElementById('bpmSlider');
+        const keyDisplay = document.getElementById('keyDisplay');
+        const leaderToggleBtn = document.getElementById('leaderToggleBtn');
+        const roleBadge = document.getElementById('roleBadge');
+        const syncRoleStatus = document.getElementById('syncRoleStatus');
+        const roleSelect = document.getElementById('roleSelect');
+        const stagePrompterView = document.getElementById('stagePrompterView');
+        const songEditorView = document.getElementById('songEditorView');
+        const readModeTab = document.getElementById('readModeTab');
+        const editModeTab = document.getElementById('editModeTab');
+        const tempoAlert = document.getElementById('tempoAlert');
+        const tempoAlertText = document.getElementById('tempoAlertText');
+        const metronomeVisual = document.getElementById('metronomeVisual');
+        const hostPinModal = document.getElementById('hostPinModal');
+
+        // --- INITIALIZATION ---
+        window.onload = () => {
+            lucide.createIcons();
+            loadSongsFromStorageOrFirebase();
+            setupCloudSyncListeners();
+            setupSpeedPresets();
+        };
+
+        function loadSongsFromStorageOrFirebase() {
+            if (songsRef) {
+                songsRef.once('value').then(snapshot => {
+                    const data = snapshot.val();
+                    if (!data) {
+                        songsRef.set(DEFAULT_PRESETS);
+                        songs = DEFAULT_PRESETS;
+                    } else {
+                        songs = Object.values(data);
+                    }
+                    finalizeInitialSongLoad();
+                }).catch(err => {
+                    console.warn("Falling back to local presets due to network:", err);
+                    songs = DEFAULT_PRESETS;
+                    finalizeInitialSongLoad();
+                });
+
+                songsRef.on('value', snapshot => {
+                    const data = snapshot.val();
+                    if (data) {
+                        songs = Object.values(data);
+                        renderSongList();
+                    }
+                });
+            } else {
+                songs = DEFAULT_PRESETS;
+                finalizeInitialSongLoad();
+            }
+        }
+
+        function finalizeInitialSongLoad() {
+            if (!currentSongId || !songs.find(s => s.id === currentSongId)) {
+                currentSongId = songs.length > 0 ? songs[0].id : null;
+            }
+            renderSongList();
+            if (currentSongId) loadSong(currentSongId);
+        }
+
+        // --- SONG LOADING ENGINE ---
+        function loadSong(songId) {
+            if (!songId) return;
+            const song = songs.find(s => s.id === songId);
+            if (!song) return;
+
+            currentSongId = songId;
+            currentSongTitle.innerText = song.title;
+            currentArtist.innerText = song.artist;
+            bpmDisplay.innerText = song.bpm;
+            bpmSlider.value = song.bpm;
+            currentTranspose = 0;
+            keyDisplay.innerText = 'Original';
+
+            renderLyricsAndChords(song.content);
+            highlightActiveSongInList(songId);
+
+            stagePrompterView.scrollTop = 0;
+            document.querySelectorAll('.tempo-change-marker').forEach(m => delete m.dataset.triggered);
+
+            lastAppliedState.songId = songId;
+            lastAppliedState.transpose = 0;
+            lastAppliedState.bpm = song.bpm;
+        }
+
+        function highlightActiveSongInList(songId) {
+            document.querySelectorAll('.song-item').forEach(btn => {
+                if (btn.dataset.id === songId) {
+                    btn.classList.add('bg-neonPurple/20', 'border-neonPurple', 'text-neonPurple');
+                    btn.classList.remove('bg-purple-950/60', 'border-purple-900/60', 'text-purple-200/80');
+                } else {
+                    btn.classList.remove('bg-neonPurple/20', 'border-neonPurple', 'text-neonPurple');
+                    btn.classList.add('bg-purple-950/60', 'border-purple-900/60', 'text-purple-200/80');
+                }
+            });
+        }
+
+        // --- MUSIC THEORY & TRANSPOSITION ENGINE ---
+        function transposeSinglePitch(pitch, amount) {
+            let index = CHORDS_SHARP.indexOf(pitch);
+            if (index === -1) index = CHORDS_FLAT.indexOf(pitch);
+            if (index === -1) return pitch;
+
+            let newIndex = (index + amount) % 12;
+            if (newIndex < 0) newIndex += 12;
+            return CHORDS_SHARP[newIndex];
+        }
+
+        function transposeChord(chordText, amount) {
+            if (amount === 0) return chordText;
+
+            return chordText.replace(/([A-G][#b]?)([^/]*)(?:\/([A-G][#b]?))?/g, (match, root, quality, bass) => {
+                const newRoot = transposeSinglePitch(root, amount);
+                const newBass = bass ? '/' + transposeSinglePitch(bass, amount) : '';
+                return newRoot + (quality || '') + newBass;
+            });
+        }
+
+        // --- CHORD-OVER-LYRIC RENDERER ---
+        function renderLyricsAndChords(content) {
+            lyricsContainer.innerHTML = '';
+            lyricsContainer.style.fontSize = `${fontSize}px`;
+
+            const lines = content.split('\n');
+
+            lines.forEach((line) => {
+                const bpmMatch = line.match(/\{BPM:(\d+)\}/i);
+                if (bpmMatch) {
+                    const newBpm = parseInt(bpmMatch[1], 10);
+                    const el = document.createElement('div');
+                    el.className = "tempo-change-marker py-2 border-y border-amber-500/40 bg-amber-950/20 px-3 rounded-xl my-4";
+                    el.dataset.newBpm = newBpm;
+                    el.innerHTML = `<span class="tempo-badge">⚡ AUTOMATED TEMPO SHIFT: ${newBpm} BPM</span>`;
+                    lyricsContainer.appendChild(el);
+                    return;
+                }
+
+                const trimmed = line.trim();
+                if (trimmed.startsWith('[') && trimmed.endsWith(']') && !trimmed.includes('] [')) {
+                    const el = document.createElement('div');
+                    el.className = "font-bold text-neonAmber uppercase tracking-wider text-sm mt-5 mb-1 border-b border-purple-900/50 pb-1 font-mono";
+                    el.innerText = trimmed;
+                    lyricsContainer.appendChild(el);
+                    return;
+                }
+
+                if (trimmed === '') {
+                    const el = document.createElement('div');
+                    el.className = "line-plain h-3";
+                    lyricsContainer.appendChild(el);
+                    return;
+                }
+
+                const lineEl = document.createElement('div');
+                lineEl.className = "lyric-line";
+
+                const tokens = [];
+                const regex = /\[(.*?)\]|([^[]+)/g;
+                let m;
+                while ((m = regex.exec(line)) !== null) {
+                    if (m[1] !== undefined) {
+                        tokens.push({ type: 'chord', value: m[1] });
+                    } else if (m[2] !== undefined && m[2] !== '') {
+                        tokens.push({ type: 'text', value: m[2] });
+                    }
+                }
+
+                let pendingChord = null;
+
+                tokens.forEach((tok) => {
+                    if (tok.type === 'chord') {
+                        if (pendingChord !== null) {
+                            appendSyllable(lineEl, pendingChord, '\u00A0');
+                        }
+                        pendingChord = tok.value;
+                    } else {
+                        const textValue = tok.value;
+                        if (pendingChord !== null) {
+                            const leadingMatch = textValue.match(/^(\s*)([\s\S]*)$/);
+                            const leading = leadingMatch[1] || '';
+                            const rest = leadingMatch[2] || '';
+
+                            if (leading) {
+                                const leadSpan = document.createElement('span');
+                                leadSpan.className = 'word-text';
+                                leadSpan.textContent = leading;
+                                lineEl.appendChild(leadSpan);
+                            }
+
+                            if (rest !== '') {
+                                const firstWordMatch = rest.match(/^(\S+)([\s\S]*)$/);
+                                const firstWord = firstWordMatch ? firstWordMatch[1] : rest;
+                                const remainder = firstWordMatch ? firstWordMatch[2] : '';
+
+                                appendSyllable(lineEl, pendingChord, firstWord);
+
+                                if (remainder) {
+                                    const remEl = document.createElement('span');
+                                    remEl.className = 'word-text';
+                                    remEl.textContent = remainder;
+                                    lineEl.appendChild(remEl);
+                                }
+                            } else {
+                                appendSyllable(lineEl, pendingChord, '\u00A0');
+                            }
+                            pendingChord = null;
+                        } else {
+                            const span = document.createElement('span');
+                            span.className = 'word-text';
+                            span.textContent = textValue;
+                            lineEl.appendChild(span);
+                        }
+                    }
+                });
+
+                if (pendingChord !== null) {
+                    appendSyllable(lineEl, pendingChord, '\u00A0');
+                }
+
+                lyricsContainer.appendChild(lineEl);
+            });
+        }
+
+        function appendSyllable(container, chord, wordText) {
+            const syl = document.createElement('span');
+            syl.className = 'syllable';
+            const chordEl = document.createElement('span');
+            chordEl.className = 'chord-above';
+            chordEl.textContent = transposeChord(chord, currentTranspose);
+            syl.appendChild(chordEl);
+            const wordEl = document.createElement('span');
+            wordEl.className = 'word-text';
+            wordEl.textContent = wordText;
+            syl.appendChild(wordEl);
+            container.appendChild(syl);
+        }
+
+        function escapeHtml(text) {
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+
+        // --- PRECISION AUTO-SCROLL & WEB AUDIO METRONOME ENGINE ---
+        function togglePlay() {
+            isPlaying = !isPlaying;
+
+            if (isPlaying) {
+                initAudioContext();
+                playIcon.setAttribute('data-lucide', 'pause');
+                playBtn.classList.add('from-neonAmber', 'to-amber-600');
+                
+                lastTimestamp = performance.now();
+                nextNoteTime = audioCtx.currentTime + 0.05;
+                
+                startPlaybackEngine();
+            } else {
+                playIcon.setAttribute('data-lucide', 'play');
+                playBtn.classList.remove('from-neonAmber', 'to-amber-600');
+                stopPlaybackEngine();
+            }
+            lucide.createIcons();
+
+            if (isLeader) {
+                broadcastState({
+                    type: 'PLAY_STATE_CHANGE',
+                    isPlaying,
+                    songId: currentSongId,
+                    scrollPos: stagePrompterView.scrollTop,
+                    bpm: parseInt(bpmSlider.value, 10),
+                    transpose: currentTranspose
+                });
+            }
+        }
+
+        // Follower-only play state toggle (does NOT re-broadcast)
+        function togglePlayLocally(targetState) {
+            isPlaying = targetState;
+            if (isPlaying) {
+                initAudioContext();
+                playIcon.setAttribute('data-lucide', 'pause');
+                playBtn.classList.add('from-neonAmber', 'to-amber-600');
+                lastTimestamp = performance.now();
+                nextNoteTime = audioCtx.currentTime + 0.05;
+                startPlaybackEngine();
+            } else {
+                playIcon.setAttribute('data-lucide', 'play');
+                playBtn.classList.remove('from-neonAmber', 'to-amber-600');
+                stopPlaybackEngine();
+            }
+            lucide.createIcons();
+        }
+
+        function initAudioContext() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function startPlaybackEngine() {
+            if (rAFId) cancelAnimationFrame(rAFId);
+
+            function loop(now) {
+                if (!isPlaying) return;
+
+                const deltaSec = (now - lastTimestamp) / 1000;
+                lastTimestamp = now;
+
+                const currentBpm = parseInt(bpmSlider.value, 10);
+                const pxPerSec = (currentBpm * 0.45) * scrollSpeedMultiplier;
+                stagePrompterView.scrollTop += pxPerSec * deltaSec;
+
+                checkTempoAutomation();
+                scheduleMetronomeClicks();
+
+                if (isLeader && Math.floor(stagePrompterView.scrollTop) % 20 === 0) {
+                    broadcastState({
+                        type: 'SCROLL_SYNC',
+                        scrollPos: stagePrompterView.scrollTop
+                    });
+                }
+
+                rAFId = requestAnimationFrame(loop);
+            }
+
+            rAFId = requestAnimationFrame(loop);
+        }
+
+        function stopPlaybackEngine() {
+            if (rAFId) {
+                cancelAnimationFrame(rAFId);
+                rAFId = null;
+            }
+        }
+
+        function scheduleMetronomeClicks() {
+            if (!audioCtx) return;
+            const bpm = parseInt(bpmSlider.value, 10);
+            const secondsPerBeat = 60.0 / bpm;
+
+            while (nextNoteTime < audioCtx.currentTime + 0.1) {
+                triggerVisualAndAudioTick(nextNoteTime);
+                nextNoteTime += secondsPerBeat;
+            }
+        }
+
+        function triggerVisualAndAudioTick(time) {
+            const timeUntilTick = Math.max(0, (time - audioCtx.currentTime) * 1000);
+            setTimeout(() => {
+                metronomeVisual.classList.add('metronome-flash');
+                setTimeout(() => metronomeVisual.classList.remove('metronome-flash'), 80);
+            }, timeUntilTick);
+
+            if (metronomeAudio) {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.frequency.value = 1200;
+                gain.gain.setValueAtTime(0.2, time);
+                gain.gain.exponentialRampToValueAtTime(0.001, time + 0.035);
+                osc.start(time);
+                osc.stop(time + 0.035);
+            }
+        }
+
+        function checkTempoAutomation() {
+            const markers = stagePrompterView.querySelectorAll('.tempo-change-marker');
+            const viewTop = stagePrompterView.scrollTop;
+            const containerOffset = stagePrompterView.offsetTop;
+
+            markers.forEach(marker => {
+                const markerTop = marker.offsetTop - containerOffset - 120;
+                if (Math.abs(viewTop - markerTop) < 20 && !marker.dataset.triggered) {
+                    marker.dataset.triggered = "true";
+                    const newBpm = parseInt(marker.dataset.newBpm, 10);
+
+                    bpmSlider.value = newBpm;
+                    bpmDisplay.innerText = newBpm;
+
+                    tempoAlertText.innerText = `BPM -> ${newBpm}`;
+                    tempoAlert.classList.remove('hidden');
+                    setTimeout(() => tempoAlert.classList.add('hidden'), 3500);
+
+                    if (isLeader) {
+                        broadcastState({ type: 'TEMPO_CHANGE', bpm: newBpm });
+                    }
+                }
+            });
+        }
+
+        // ============================================================
+        // --- FIREBASE CLOUD SYNC ENGINE (replaces BroadcastChannel) ---
+        // ============================================================
+        function broadcastState(payload) {
+            if (!isLeader || !sessionRef) return;
+            sessionRef.update({
+                ...payload,
+                updatedAt: firebase.database.ServerValue.TIMESTAMP
+            }).catch(err => console.warn('Cloud broadcast failed:', err));
+        }
+
+        function setupCloudSyncListeners() {
+            if (!sessionRef) {
+                console.warn('Cloud sync disabled: no Firebase session ref');
+                return;
+            }
+
+            sessionRef.on('value', (snapshot) => {
+                const data = snapshot.val();
+                if (!data) return;
+
+                // Host should ignore its own echoes
+                if (isLeader) return;
+
+                // Skip if we've already applied this exact state
+                if (lastAppliedState.updatedAt === data.updatedAt) return;
+                lastAppliedState.updatedAt = data.updatedAt;
+
+                // 1. Song Change
+                if (data.songId && data.songId !== currentSongId) {
+                    loadSong(data.songId);
+                }
+
+                // 2. Play / Pause State
+                if (typeof data.isPlaying === 'boolean' && isPlaying !== data.isPlaying) {
+                    togglePlayLocally(data.isPlaying);
+                }
+
+                // 3. Scroll Sync Position
+                if (typeof data.scrollPos === 'number' && Math.abs(stagePrompterView.scrollTop - data.scrollPos) > 30) {
+                    stagePrompterView.scrollTop = data.scrollPos;
+                }
+
+                // 4. Tempo / BPM Change
+                if (data.bpm && parseInt(bpmSlider.value, 10) !== data.bpm) {
+                    bpmSlider.value = data.bpm;
+                    bpmDisplay.innerText = data.bpm;
+                }
+
+                // 5. Transpose Key Change
+                if (typeof data.transpose === 'number' && currentTranspose !== data.transpose) {
+                    currentTranspose = data.transpose;
+                    updateKeyDisplay();
+                    const song = songs.find(s => s.id === currentSongId);
+                    if (song) renderLyricsAndChords(song.content);
+                }
+            }, (err) => {
+                console.warn('Cloud sync listener error:', err);
+            });
+        }
+
+        // --- HOST AUTHENTICATION GUARD ---
+        leaderToggleBtn.onclick = () => {
+            if (!isLeader) {
+                document.getElementById('hostPinInput').value = '';
+                document.getElementById('hostPinError').classList.add('hidden');
+                hostPinModal.classList.remove('hidden');
+            } else {
+                revokeHost();
+            }
+        };
+
+        document.getElementById('confirmHostPinBtn').onclick = authenticateHostPin;
+        document.getElementById('hostPinInput').onkeydown = (e) => {
+            if (e.key === 'Enter') authenticateHostPin();
+        };
+
+        function authenticateHostPin() {
+            const pin = document.getElementById('hostPinInput').value;
+            if (pin === HOST_PIN) {
+                isLeader = true;
+                hostPinModal.classList.add('hidden');
+                
+                roleBadge.innerText = "HOST / LEADER";
+                roleBadge.className = "text-xs px-2.5 py-0.5 rounded-full font-bold bg-purple-950 text-neonPurple border border-purple-800 tracking-wide";
+                leaderToggleBtn.classList.add('bg-neonPurple/20', 'text-neonPurple');
+                syncRoleStatus.innerText = "HOSTING CLOUD BROADCAST";
+                syncRoleStatus.className = "text-xs font-bold text-neonPurple";
+
+                // Push current state to Firebase so followers align instantly
+                broadcastState({
+                    songId: currentSongId,
+                    isPlaying,
+                    scrollPos: stagePrompterView.scrollTop,
+                    bpm: parseInt(bpmSlider.value, 10),
+                    transpose: currentTranspose
+                });
+            } else {
+                document.getElementById('hostPinError').classList.remove('hidden');
+            }
+        }
+
+        document.getElementById('cancelHostPinBtn').onclick = () => {
+            hostPinModal.classList.add('hidden');
+        };
+
+        function revokeHost() {
+            isLeader = false;
+            roleBadge.innerText = "FOLLOWER";
+            roleBadge.className = "text-xs px-2.5 py-0.5 rounded-full font-bold bg-amber-950/80 text-neonAmber border border-amber-800/80 tracking-wide";
+            leaderToggleBtn.classList.remove('bg-neonPurple/20', 'text-neonPurple');
+            syncRoleStatus.innerText = "FOLLOWER MODE";
+            syncRoleStatus.className = "text-xs font-bold text-neonAmber";
+        }
+
+        // --- UI INTERACTION HANDLERS ---
+        playBtn.onclick = togglePlay;
+
+        document.getElementById('resetScrollBtn').onclick = () => {
+            stagePrompterView.scrollTop = 0;
+            document.querySelectorAll('.tempo-change-marker').forEach(m => delete m.dataset.triggered);
+            if (isLeader) broadcastState({ type: 'SCROLL_SYNC', scrollPos: 0 });
+        };
+
+        document.getElementById('transposeUp').onclick = () => {
+            currentTranspose++;
+            updateKeyDisplay();
+            const song = songs.find(s => s.id === currentSongId);
+            if (song) renderLyricsAndChords(song.content);
+            if (isLeader) broadcastState({ type: 'TRANSPOSE_CHANGE', transpose: currentTranspose });
+        };
+
+        document.getElementById('transposeDown').onclick = () => {
+            currentTranspose--;
+            updateKeyDisplay();
+            const song = songs.find(s => s.id === currentSongId);
+            if (song) renderLyricsAndChords(song.content);
+            if (isLeader) broadcastState({ type: 'TRANSPOSE_CHANGE', transpose: currentTranspose });
+        };
+
+        document.getElementById('transposeReset').onclick = () => {
+            currentTranspose = 0;
+            updateKeyDisplay();
+            const song = songs.find(s => s.id === currentSongId);
+            if (song) renderLyricsAndChords(song.content);
+            if (isLeader) broadcastState({ type: 'TRANSPOSE_CHANGE', transpose: 0 });
+        };
+
+        function updateKeyDisplay() {
+            if (currentTranspose === 0) {
+                keyDisplay.innerText = "Original";
+            } else {
+                keyDisplay.innerText = (currentTranspose > 0 ? `+${currentTranspose}` : `${currentTranspose}`) + " Semi";
+            }
+        }
+
+        bpmSlider.oninput = (e) => {
+            const val = e.target.value;
+            bpmDisplay.innerText = val;
+            if (isLeader) broadcastState({ type: 'TEMPO_CHANGE', bpm: parseInt(val, 10) });
+        };
+
+        document.getElementById('scrollSpeedSlider').oninput = (e) => {
+            setScrollSpeed(parseFloat(e.target.value));
+        };
+
+        function setupSpeedPresets() {
+            document.querySelectorAll('.speed-preset-btn').forEach(btn => {
+                btn.onclick = () => {
+                    const speed = parseFloat(btn.dataset.speed);
+                    document.getElementById('scrollSpeedSlider').value = speed;
+                    setScrollSpeed(speed);
+                };
+            });
+        }
+
+        function setScrollSpeed(val) {
+            scrollSpeedMultiplier = val;
+            document.getElementById('scrollSpeedVal').innerText = `${scrollSpeedMultiplier.toFixed(1)}x`;
+        }
+
+        document.getElementById('metronomeAudioToggle').onclick = () => {
+            initAudioContext();
+            metronomeAudio = !metronomeAudio;
+            const label = document.getElementById('audioLabel');
+            const icon = document.getElementById('audioIcon');
+            if (metronomeAudio) {
+                label.innerText = "Click Audio On";
+                label.classList.add('text-neonAmber');
+                icon.setAttribute('data-lucide', 'volume-2');
+                icon.classList.add('text-neonAmber');
+            } else {
+                label.innerText = "Click Audio Off";
+                label.classList.remove('text-neonAmber');
+                icon.setAttribute('data-lucide', 'volume-x');
+                icon.classList.remove('text-neonAmber');
+            }
+            lucide.createIcons();
+        };
+
+        document.getElementById('fontSizeUp').onclick = () => {
+            fontSize = Math.min(36, fontSize + 2);
+            lyricsContainer.style.fontSize = `${fontSize}px`;
+        };
+        document.getElementById('fontSizeDown').onclick = () => {
+            fontSize = Math.max(13, fontSize - 2);
+            lyricsContainer.style.fontSize = `${fontSize}px`;
+        };
+
+        document.getElementById('contrastToggle').onclick = () => {
+            highContrast = !highContrast;
+            if (highContrast) {
+                stagePrompterView.classList.add('high-contrast');
+                document.getElementById('contrastToggle').classList.add('bg-neonGreen/20', 'text-neonGreen');
+            } else {
+                stagePrompterView.classList.remove('high-contrast');
+                document.getElementById('contrastToggle').classList.remove('bg-neonGreen/20', 'text-neonGreen');
+            }
+        };
+
+        document.getElementById('fullScreenBtn').onclick = () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => console.error("Fullscreen blocked:", err));
+            } else {
+                document.exitFullscreen();
+            }
+        };
+
+        function renderSongList() {
+            songListEl.innerHTML = '';
+            songs.forEach(song => {
+                const btn = document.createElement('button');
+                btn.dataset.id = song.id;
+                btn.className = `song-item w-full text-left p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-between transition ${song.id === currentSongId ? 'bg-neonPurple/20 border-neonPurple text-neonPurple' : 'bg-purple-950/60 border-purple-900/60 text-purple-200/80 hover:border-purple-700/60'}`;
+                btn.innerHTML = `
+                    <div class="truncate pr-2">
+                        <div class="truncate font-bold text-white">${escapeHtml(song.title)}</div>
+                        <div class="text-[10px] text-purple-300/60 truncate">${escapeHtml(song.artist)}</div>
+                    </div>
+                    <span class="text-[10px] font-mono font-bold text-amber-400 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-800/50">${song.bpm} BPM</span>
+                `;
+                btn.onclick = () => {
+                    loadSong(song.id);
+                    if (isLeader) broadcastState({ type: 'SONG_CHANGE', songId: song.id });
+                };
+                songListEl.appendChild(btn);
+            });
+        }
+
+        // --- EDITOR MODE & CRUD OPERATIONS ---
+        readModeTab.onclick = () => {
+            stagePrompterView.classList.remove('hidden');
+            songEditorView.classList.add('hidden');
+            readModeTab.className = "flex-1 py-2 text-xs font-bold rounded-xl bg-neonPurple/15 text-neonPurple border border-neonPurple/30 transition flex items-center justify-center space-x-1.5";
+            editModeTab.className = "flex-1 py-2 text-xs font-bold rounded-xl text-purple-300/70 hover:text-white transition flex items-center justify-center space-x-1.5";
+        };
+
+        editModeTab.onclick = () => {
+            const currentSong = songs.find(s => s.id === currentSongId);
+            if (currentSong) {
+                document.getElementById('editTitle').value = currentSong.title;
+                document.getElementById('editArtist').value = currentSong.artist;
+                document.getElementById('editBpm').value = currentSong.bpm;
+                document.getElementById('editTextarea').value = currentSong.content;
+            }
+            stagePrompterView.classList.add('hidden');
+            songEditorView.classList.remove('hidden');
+            editModeTab.className = "flex-1 py-2 text-xs font-bold rounded-xl bg-neonPurple/15 text-neonPurple border border-neonPurple/30 transition flex items-center justify-center space-x-1.5";
+            readModeTab.className = "flex-1 py-2 text-xs font-bold rounded-xl text-purple-300/70 hover:text-white transition flex items-center justify-center space-x-1.5";
+        };
+
+        document.getElementById('saveSongBtn').onclick = () => {
+            const title = document.getElementById('editTitle').value.trim();
+            const artist = document.getElementById('editArtist').value.trim();
+            const bpm = parseInt(document.getElementById('editBpm').value, 10) || 120;
+            const content = document.getElementById('editTextarea').value;
+
+            if (!title) {
+                alert("Please enter a valid song title.");
+                return;
+            }
+
+            const idx = songs.findIndex(s => s.id === currentSongId);
+            if (idx !== -1) {
+                const updatedSong = { ...songs[idx], title, artist, bpm, content };
+                songs[idx] = updatedSong;
+
+                if (songsRef) {
+                    songsRef.child(currentSongId).set(updatedSong);
+                }
+            }
+
+            renderSongList();
+            loadSong(currentSongId);
+            readModeTab.click();
+        };
+
+        document.getElementById('deleteSongBtn').onclick = () => {
+            if (songs.length <= 1) {
+                alert("Cannot delete the only song in your setlist.");
+                return;
+            }
+
+            if (confirm("Are you sure you want to delete this song from your setlist?")) {
+                const idToDelete = currentSongId;
+                songs = songs.filter(s => s.id !== idToDelete);
+
+                if (songsRef) {
+                    songsRef.child(idToDelete).remove();
+                }
+
+                currentSongId = songs[0].id;
+                renderSongList();
+                loadSong(currentSongId);
+                readModeTab.click();
+            }
+        };
+
+        document.getElementById('newSongBtn').onclick = () => {
+            const newId = 'song-' + Date.now();
+            const newSong = {
+                id: newId,
+                title: 'New Setlist Medley',
+                artist: 'Band Name',
+                bpm: 110,
+                content: `[Intro]\n[G] . . . [D/F#] . . .\n\n[Verse 1]\nEnter lyrics here with [G] chords...`
+            };
+
+            songs.push(newSong);
+
+            if (songsRef) {
+                songsRef.child(newId).set(newSong);
+            }
+
+            renderSongList();
+            loadSong(newId);
+            editModeTab.click();
+        };
+    </script>
+</body>
+</html>
